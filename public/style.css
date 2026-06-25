@@ -132,6 +132,7 @@ button{font-family:inherit;cursor:pointer;border:none;color:inherit}
 .toast.show{opacity:1}
 
 .zoom-overlay{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:80;display:grid;place-items:center;padding:10px}
+.zoom-overlay[hidden]{display:none}
 .zoom-overlay img{max-width:100%;max-height:100%;background:#fff;border-radius:6px}
 
 .empty{text-align:center;color:var(--muted);padding:40px 10px;font-size:14px}
