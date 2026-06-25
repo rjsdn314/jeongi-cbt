@@ -27,7 +27,7 @@ function toast(msg){
 function bookmarks(){ return LS.get('marks',{}); }
 function isMarked(id){ return !!bookmarks()[id]; }
 function toggleMark(id){ const m=bookmarks(); if(m[id])delete m[id]; else m[id]=1; LS.set('marks',m); return !!m[id]; }
-function addWrong(q){ const w=LS.get('wrong',{}); w[q.id]={slug:state.subject.slug,img:q.img,ans:q.ans,src:q.src,diff:q.diff,id:q.id}; LS.set('wrong',w); }
+function addWrong(q){ const w=LS.get('wrong',{}); w[q.id]={slug:(q.id||'').split('_')[0],img:q.img,ans:q.ans,src:q.src,diff:q.diff,id:q.id,exp:q.exp,subj:q.subj}; LS.set('wrong',w); }
 function clearWrong(id){ const w=LS.get('wrong',{}); delete w[id]; LS.set('wrong',w); }
 
 /* ===================== HOME ===================== */
@@ -49,6 +49,11 @@ function home(){
           <div class="bar"></div>
         </button>`).join('')}
     </div>
+    <div class="section-title">실전 모의고사</div>
+    <div class="grid">
+      <button class="tile mock" id="t-mock"><div class="ico">📝</div>
+        <div class="t"><b>전과목 모의고사</b><span>5과목 랜덤 출제 · 실전 타이머</span></div><div class="arrow">›</div></button>
+    </div>
     <div class="section-title">학습 도구</div>
     <div class="grid">
       <button class="tile" id="t-wrong"><div class="ico">📕</div>
@@ -62,8 +67,54 @@ function home(){
     <div class="footer">동일출판사 전기기사 시리즈 기출문제 기반 · 학습용<br/>문제 이미지는 원본 교재에서 추출되었습니다.</div>
   `;
   app.querySelectorAll('.subj').forEach(b=> b.onclick=()=> setup(b.dataset.slug));
+  app.querySelector('#t-mock').onclick  = mockSetup;
   app.querySelector('#t-wrong').onclick = ()=> startReviewPool('wrong');
   app.querySelector('#t-mark').onclick  = ()=> startReviewPool('mark');
+}
+
+/* ===================== 전과목 모의고사 ===================== */
+const MOCK = { count:100, mode:'exam' };
+function mockSetup(){
+  const subN = state.index.length || 5;
+  app.innerHTML = `
+    <button class="back" id="bk">‹ 홈</button>
+    <div class="panel">
+      <h2>📝 전과목 모의고사</h2>
+      <div class="muted" style="font-size:13px">제어공학·회로이론·전기기기·전기자기·전력공학에서 랜덤 출제 (과목 균등 배분)</div>
+      <div class="opt-row"><div class="label">문항 수</div><div class="chips" id="c-mcount">
+        ${[50,100,200].map(n=>`<button class="chip" data-v="${n}">${n}문제<span class="sub"> · 과목당 ${Math.round(n/subN)}</span></button>`).join('')}
+      </div></div>
+      <div class="opt-row"><div class="label">모드</div><div class="chips" id="c-mmode">
+        <button class="chip" data-v="exam">실전 (시험 후 채점)</button>
+        <button class="chip" data-v="study">학습 (즉시 채점)</button>
+      </div></div>
+      <button class="start-btn" id="mgo">모의고사 시작</button>
+    </div>`;
+  app.querySelector('#bk').onclick=home;
+  function bind(id,key,cast){
+    const wrap=app.querySelector(id);
+    wrap.querySelectorAll('.chip').forEach(c=>{
+      const v=cast?cast(c.dataset.v):c.dataset.v;
+      if(v===MOCK[key]) c.classList.add('on');
+      c.onclick=()=>{ wrap.querySelectorAll('.chip').forEach(x=>x.classList.remove('on')); c.classList.add('on'); MOCK[key]=v; };
+    });
+  }
+  bind('#c-mcount','count',v=>+v); bind('#c-mmode','mode');
+  app.querySelector('#mgo').onclick=startMock;
+}
+async function startMock(){
+  const go=app.querySelector('#mgo'); if(go) go.textContent='문제 구성 중…';
+  const per=Math.round(MOCK.count/(state.index.length||5));
+  let pool=[];
+  for(const s of state.index){
+    const arr=await loadSubject(s.slug);
+    const picked=shuffle(arr).slice(0, Math.min(per, arr.length));
+    picked.forEach(q=>q.subj=s.name);
+    pool=pool.concat(picked);
+  }
+  pool=shuffle(pool);
+  state.subject={slug:'mock', name:'전과목 모의고사'};
+  startQuiz(pool, {mode:MOCK.mode, title:'전과목 모의고사'});
 }
 
 /* ===================== SETUP ===================== */
@@ -156,6 +207,7 @@ function renderQuiz(){
     <div class="qcard">
       <div class="qmeta">
         <span class="qnum">Q${Q.i+1}</span>
+        ${q.subj?`<span class="tag subj">${q.subj}</span>`:''}
         ${q.src?`<span class="tag">${q.src}</span>`:''}
         ${q.diff?`<span class="tag">${'★'.repeat(Math.min(q.diff,3))}</span>`:''}
         <button class="star ${isMarked(q.id)?'on':''}" id="q-star">${isMarked(q.id)?'★':'☆'}</button>
@@ -167,6 +219,7 @@ function renderQuiz(){
       ${[1,2,3,4].map(n=>`<button class="choice" data-n="${n}"><span class="badge">${CIR[n]}</span><span>${n}번</span></button>`).join('')}
     </div>
     <div class="verdict" id="q-verdict"></div>
+    <div id="q-exp"></div>
     <div class="navbtns">
       <button id="q-prev" ${Q.i===0?'disabled':''}>‹ 이전</button>
       ${Q.i===total-1
@@ -188,7 +241,7 @@ function renderQuiz(){
     }
     c.onclick=()=> pick(n);
   });
-  if(reveal) showVerdict(q, sel);
+  if(reveal){ showVerdict(q, sel); renderExp(q); }
   // events
   app.querySelector('#q-exit').onclick=()=>{ if(confirm('풀이를 종료할까요? 진행상황은 저장되지 않습니다.')) exitQuiz(); };
   app.querySelector('#q-star').onclick=(e)=>{ const on=toggleMark(q.id); e.target.classList.toggle('on',on); e.target.textContent=on?'★':'☆'; };
@@ -217,6 +270,18 @@ function showVerdict(q, sel){
   const ok = sel===q.ans;
   v.className='verdict show '+(ok?'ok':'no');
   v.textContent = ok ? `정답입니다! (${CIR[q.ans]})` : `오답입니다. 정답은 ${CIR[q.ans]} ${q.ans}번 입니다.`;
+}
+function renderExp(q){
+  const c=app.querySelector('#q-exp'); if(!c) return;
+  if(!q.exp){ c.innerHTML=''; return; }
+  c.innerHTML=`<button class="exp-toggle" id="q-exptog">📖 해설 보기</button>
+    <div class="qimg-wrap exp-img" id="q-expimg" hidden><img class="qimg" alt="해설"/></div>`;
+  const tog=c.querySelector('#q-exptog'), box=c.querySelector('#q-expimg'), img=box.querySelector('img');
+  tog.onclick=()=>{
+    if(box.hasAttribute('hidden')){ if(!img.src) img.src=q.exp; box.removeAttribute('hidden'); tog.textContent='📖 해설 닫기'; }
+    else { box.setAttribute('hidden',''); tog.textContent='📖 해설 보기'; }
+  };
+  img.onclick=()=> openZoom(q.exp);
 }
 function openZoom(src){
   const o=document.getElementById('zoom'); const im=document.getElementById('zoomImg');
@@ -262,8 +327,21 @@ function result(correct,total,score){
           <span class="pill mine">내 답 ${x.my?CIR[x.my]:'미응답'}</span>
           <span class="pill ans">정답 ${CIR[x.q.ans]}</span></div>
         <div class="qimg-wrap"><img class="qimg" src="${x.q.img}" loading="lazy" onclick="document.getElementById('zoom').hidden=false;document.getElementById('zoomImg').src=this.src;document.getElementById('zoom').onclick=()=>document.getElementById('zoom').hidden=true;"/></div>
+        ${x.q.exp?`<button class="exp-toggle" data-exp="${x.q.exp}">📖 해설 보기</button>`:''}
       </div>`).join('')}</div>
   `;
+  app.querySelectorAll('#r-list .exp-toggle').forEach(btn=>{
+    btn.onclick=()=>{
+      let box=btn.nextElementSibling;
+      if(box && box.classList.contains('exp-img')){
+        const hid=box.hasAttribute('hidden'); box.toggleAttribute('hidden'); btn.textContent=hid?'📖 해설 닫기':'📖 해설 보기'; return;
+      }
+      box=document.createElement('div'); box.className='qimg-wrap exp-img';
+      box.innerHTML=`<img class="qimg" src="${btn.dataset.exp}"/>`;
+      box.querySelector('img').onclick=()=>openZoom(btn.dataset.exp);
+      btn.after(box); btn.textContent='📖 해설 닫기';
+    };
+  });
   app.querySelector('#r-home').onclick=()=>{ Q=null; home(); };
   const rt=app.querySelector('#r-retry'); if(rt) rt.onclick=()=> startQuiz(shuffle(wrongs.map(x=>x.q)),{mode:'study',title:Q.title+' 오답',review:false});
   const ag=app.querySelector('#r-again'); if(ag) ag.onclick=()=> startQuiz(shuffle(Q.items),{mode:Q.mode,title:Q.title});

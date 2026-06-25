@@ -97,6 +97,15 @@ button{font-family:inherit;cursor:pointer;border:none;color:inherit}
 .verdict.ok{background:rgba(34,197,94,.12);color:#15803d;border:1px solid rgba(34,197,94,.35)}
 .verdict.no{background:rgba(239,68,68,.10);color:#b91c1c;border:1px solid rgba(239,68,68,.35)}
 
+.exp-toggle{margin-top:10px;width:100%;background:var(--card2);border:1px solid var(--line);
+  border-radius:12px;padding:12px;font-size:14px;font-weight:700;color:var(--accent2)}
+.exp-toggle:active{transform:scale(.99)}
+.exp-img{margin-top:10px}
+.tag.subj{background:rgba(14,165,233,.12);color:var(--accent2);border-color:rgba(14,165,233,.3);font-weight:700}
+.chip .sub{font-weight:500;opacity:.7;font-size:12px}
+.tile.mock .ico{font-size:22px}
+.tile.mock{background:linear-gradient(135deg,#eff6ff,#ffffff);border-color:#bae6fd}
+
 .navbtns{display:flex;gap:10px;margin-top:6px}
 .navbtns button{flex:1;background:var(--card2);border:1px solid var(--line);border-radius:13px;padding:14px;font-size:15px;font-weight:700}
 .navbtns button:disabled{opacity:.4}
